@@ -1,0 +1,126 @@
+﻿【主要功能】
+定时读取调度提供的【短期负荷预测】及【超短期负荷预测】文件，格式形如BJ_20190525_DQMXFHYC.txt和BJ_20190523_1430_RNMXFHYC.TXT，
+提取文件中的96点有功预测值，写入mysql（达梦）数据库的shortloadhisdata_2019和ultraloadhisdata_2019表；
+
+【注意事项】
+1、各目录层级关系已经列出；
+2、在icssetting新增esfileserver进程的item项，正常配置即可；
+2、在ini/esfilesetting.ini主要配置的是filename和多个station记录，其他不重要；
+     目前只支持超短期发电预测文件，文件名中含有RNMXFHYC字样；以及短期发电预测文件，文件名中含有DQMXFHYC字样；
+3、在cbin、ini同级目录下新建一个名为file的文件夹，存放短期负荷预测及超短期负荷预测文件。
+4、服务每30秒读取一次file文件夹，如果有文件，会对文件进行处理，处理后会在该路径下自动生成一个名为“processed”（已处理）的文件夹，
+     解析过的文件都会被移动到这个文件夹内。如果文件名或文件格式不正确，则会在log下打印错误日志，并且不会放入processed的文件夹内。
+5、测试时，可以在服务启动前先扔一个短期和一个超短期负荷预测的txt文件进去，等服务启动后，在看到file中文件已经被移动到processed文件夹，
+     说明处理完成，这时可以立即再扔另一个短期和一个超短期负荷预测的txt到file下，等待约30s后发现file下文件再次被处理，转移到processed文件夹内。
+6、如果正常，会在mysql的shortloadhisdata和ultraloadhisdata两个表中看到写入的记录。
+
+【含义说明】
+ini/esfilesetting.ini配置项如下：
+station1=1,10,#3; 
+等号后面第一个参数1代表负荷ID，也就是短期负荷预测shortloadhisdata里面的第一个字段ID，代表哪个负荷；每个站就涉及两个负荷，负荷1的ID=1，负荷2的ID=2
+等号后面第二个参数10代表控制区ID，也就是短期负荷预测shortloadhisdata里面的第二个字段CTRLID，代表哪个控制区；一个控制区可以有多个station；
+等号后面第三个参数#3代表TXT中对应的记录ID；
+
+【涉及到的数据库表】
+包括以下5个：
+mysql（达梦）数据库：
+shortloadhisdata_2019
+ultraloadhisdata_2019
+stagctodayplan_2019
+stagcnextdayplan_2019
+
+以及实时库：
+stationdispc
+
+【达梦数据库建表SQL语句】
+CREATE TABLE "ESS8600"."SHORTLOADHISDATA_2019"
+(
+"ID" INT NOT NULL,
+"CTRLID" INT NOT NULL,
+"FORCASTTIME" TIMESTAMP(0) NOT NULL,
+"SAVETIME" TIMESTAMP(0) NOT NULL,
+"METHOD" INT NOT NULL,
+"FORCASTP" DOUBLE,
+"REALTP" DOUBLE,
+"FORCASTERR" DOUBLE,
+"REPAIRP" DOUBLE,
+NOT CLUSTER PRIMARY KEY("ID", "CTRLID", "FORCASTTIME", "SAVETIME", "METHOD")) STORAGE(ON "MAIN", CLUSTERBTR) ;
+
+CREATE TABLE "ESS8600"."ULTRALOADHISDATA_2019"
+(
+"ID" INT NOT NULL,
+"CTRLID" INT NOT NULL,
+"FORCASTTIME" TIMESTAMP(0) NOT NULL,
+"SAVETIME" TIMESTAMP(0) NOT NULL,
+"METHOD" INT NOT NULL,
+"FORCASTP" DOUBLE,
+"REALTP" DOUBLE,
+"FORCASTERR" DOUBLE,
+"REPAIRP" DOUBLE,
+NOT CLUSTER PRIMARY KEY("ID", "CTRLID", "FORCASTTIME", "SAVETIME", "METHOD")) STORAGE(ON "MAIN", CLUSTERBTR) ;
+
+
+【mysql数据库建表SQL语句】
+CREATE TABLE SHORTLOADHISDATA_2019
+(
+   ID                   INT NOT NULL COMMENT 'ID',
+   CTRLID                   INT NOT NULL COMMENT 'CTRLID',
+   FORCASTTIME          DATETIME NOT NULL,
+   SAVETIME             DATETIME NOT NULL,
+   METHOD               INT NOT NULL,
+   FORCASTP             FLOAT,
+   REALTP               FLOAT,
+   FORCASTERR           FLOAT, 
+   REPAIRP              FLOAT,
+   PRIMARY KEY (ID, CTRLID, FORCASTTIME, METHOD, SAVETIME)
+);
+
+CREATE TABLE ULTRALOADHISDATA_2019
+(
+   ID                   INT NOT NULL COMMENT 'ID',
+   CTRLID                   INT NOT NULL COMMENT 'CTRLID',
+   FORCASTTIME          DATETIME NOT NULL,
+   SAVETIME             DATETIME NOT NULL,
+   METHOD               INT NOT NULL,
+   FORCASTP             FLOAT,
+   REALTP               FLOAT,
+   FORCASTERR           FLOAT, 
+   REPAIRP              FLOAT,
+   PRIMARY KEY (ID, CTRLID, FORCASTTIME, METHOD, SAVETIME)
+);
+
+CREATE TABLE STAGCNEXTDAYPLAN_2019
+(
+   ID                   INT NOT NULL COMMENT '记录ID',
+   PLANDATE                   DATETIME NOT NULL,
+   PLANVALUESQ          INT NOT NULL,
+   AUTOPLANAIM                FLOAT NOT NULL,
+   PLANREVISEDAIM             FLOAT NOT NULL,
+   OPRTREVISEDAIM             FLOAT NOT NULL,
+   PLANUSERID               VARCHAR(32),
+   PLANREVISEDTIME           DATETIME,
+   OPRTUSERID              VARCHAR(32),
+   OPRTREVISEDTIME	         DATETIME,
+   CTRLVALUE               FLOAT COMMENT '充放电大小' ,
+   CTRLTIME                  DATETIME,
+   DIFFEREASON             VARCHAR(64),
+   PRIMARY KEY (ID, PLANDATE, PLANVALUESQ)
+);
+
+CREATE TABLE STAGCTODAYPLAN_2019
+(
+   ID                   INT NOT NULL COMMENT '记录ID',
+   PLANDATE                   DATETIME NOT NULL,
+   PLANVALUESQ          INT NOT NULL,
+   AUTOPLANAIM                FLOAT NOT NULL,
+   PLANREVISEDAIM             FLOAT NOT NULL,
+   OPRTREVISEDAIM             FLOAT NOT NULL,
+   PLANUSERID               VARCHAR(32) NOT NULL,
+   PLANREVISEDTIME           DATETIME NOT NULL,
+   OPRTUSERID              VARCHAR(32),
+   OPRTREVISEDTIME	         DATETIME,
+   CTRLVALUE               FLOAT COMMENT '充放电大小' ,
+   CTRLTIME                  DATETIME,
+   DIFFEREASON             VARCHAR(64),
+   PRIMARY KEY (ID, PLANDATE, PLANVALUESQ)
+);
